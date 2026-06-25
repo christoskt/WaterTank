@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Water Tank Monitor</title>
+  <!-- Load the MQTT protocol library directly in the browser -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+      background-color: #121212; 
+      color: #ffffff; 
+      display: flex; 
+      justify-content: center; 
+      align-items: center; 
+      height: 100vh; 
+      margin: 0; 
+    }
+    .card { 
+      background: #1e1e1e; 
+      padding: 30px; 
+      border-radius: 12px; 
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5); 
+      width: 100%; 
+      max-width: 350px; 
+    }
+    h2 { margin-top: 0; color: #4facfe; text-align: center; }
+    .metric { margin-bottom: 20px; }
+    .label { font-size: 0.9em; color: #aaaaaa; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
+    .value { font-size: 2.2em; font-weight: bold; }
+    .status { text-align: center; font-size: 0.8em; color: #888; margin-top: 15px; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>Water Tank Status</h2>
+    <div class="metric">
+      <div class="label">Actual Water Height</div>
+      <div class="value" id="height">-- cm</div>
+    </div>
+    <div class="metric">
+      <div class="label">Stored Water Volume</div>
+      <div class="value" id="volume">-- m³</div>
+    </div>
+    <div class="metric">
+      <div class="label">Sensor Distance (Raw)</div>
+      <div class="value" id="distance">-- cm</div>
+    </div>
+    <div class="status" id="status">Connecting to Cloud...</div>
+  </div>
+
+  <script>
+    // --- 1. CONFIGURATION ---
+    // Update these variables with your actual HiveMQ and Tasmota details
+    
+    // HiveMQ Cloud uses port 8884 for secure WebSockets
+    const host = 'wss://fc2fac116e914f4aa3d6c1c4c9c093c6.s1.eu.hivemq.cloud:8884/mqtt'; 
+    
+    const options = {
+      username: 'christoskt',
+      password: 'myDtef-vykvyd-xamha0',
+      clientId: 'web-viewer-' + Math.random().toString(16).substr(2, 8)
+    };
+
+    const tasmotaTopic = 'tele/+/SENSOR'; // Update if your Tasmota device name is different
+
+    // --- 2. CONNECTION & MATH ---
+    const client = mqtt.connect(host, options);
+
+    client.on('connect', () => {
+      document.getElementById('status').innerText = 'Connected to Cloud. Waiting for data...';
+      document.getElementById('status').style.color = '#00e676';
+      
+      // Tell the broker we want to listen to the ESP32
+      client.subscribe(tasmotaTopic);
+    });
+
+    client.on('error', (err) => {
+      document.getElementById('status').innerText = 'Connection Error - Check Console';
+      document.getElementById('status').style.color = '#ff1744';
+      console.error(err);
+    });
+
+    client.on('message', (topic, message) => {
+      try {
+        const payload = JSON.parse(message.toString());
+        
+        // Look for the SR04 distance reading in the JSON payload
+        if (payload.SR04 && payload.SR04.Distance !== undefined) {
+          const rawDistance = parseFloat(payload.SR04.Distance);
+          
+          // Calculate height based on 373cm tank
+          const heightCm = 373 - rawDistance;
+          
+          // Calculate volume based on 146.835 square meter footprint
+          const volumeM3 = heightCm * 1.46835;
+
+          // Push the numbers to the screen
+          document.getElementById('distance').innerText = rawDistance.toFixed(1) + ' cm';
+          document.getElementById('height').innerText = heightCm.toFixed(1) + ' cm';
+          document.getElementById('volume').innerText = volumeM3.toFixed(2) + ' m³';
+          
+          const now = new Date();
+          document.getElementById('status').innerText = 'Live update: ' + now.toLocaleTimeString();
+        }
+      } catch (e) {
+        console.error("Error parsing the message payload", e);
+      }
+    });
+  </script>
+</body>
+</html>
