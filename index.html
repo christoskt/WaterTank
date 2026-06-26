@@ -12,10 +12,14 @@
       background-color: #121212; 
       color: #ffffff; 
       display: flex; 
+      flex-direction: column; /* Stacks the cards vertically */
       justify-content: center; 
       align-items: center; 
-      height: 100vh; 
+      min-height: 100vh; 
       margin: 0; 
+      gap: 20px; /* Space between cards */
+      padding: 20px;
+      box-sizing: border-box;
     }
     .card { 
       background: #1e1e1e; 
@@ -24,16 +28,52 @@
       box-shadow: 0 4px 15px rgba(0,0,0,0.5); 
       width: 100%; 
       max-width: 350px; 
+      box-sizing: border-box;
     }
     h2 { margin-top: 0; color: #4facfe; text-align: center; }
     .metric { margin-bottom: 20px; }
     .label { font-size: 0.9em; color: #aaaaaa; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
     .value { font-size: 2.2em; font-weight: bold; }
+    
+    /* Tank Visual Styles (Wide Layout) */
+    .tank-wrapper { display: flex; justify-content: center; margin-top: 15px; margin-bottom: 15px; }
+    .tank-container {
+      width: 260px; /* Much wider */
+      height: 120px; /* Shorter height */
+      border: 4px solid #555;
+      border-radius: 8px; /* Slightly rounded corners */
+      position: relative;
+      background-color: #2a2a2a;
+      overflow: hidden;
+      box-shadow: inset 0 0 15px rgba(0,0,0,0.9);
+    }
+    .tank-water {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 0%; /* This gets updated by Javascript */
+      background: linear-gradient(to bottom, #00f2fe 0%, #4facfe 100%);
+      transition: height 1s ease-in-out;
+      box-shadow: 0 -3px 10px rgba(0, 242, 254, 0.4);
+    }
+    .tank-percentage {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 1.8em;
+      font-weight: bold;
+      color: white;
+      text-shadow: 0px 2px 6px rgba(0,0,0,0.9);
+      z-index: 10;
+    }
     .status { text-align: center; font-size: 0.8em; color: #888; margin-top: 15px; }
   </style>
 </head>
 <body>
 
+  <!-- Text Metrics Card -->
   <div class="card">
     <h2>Water Tank Status</h2>
     <div class="metric">
@@ -44,18 +84,26 @@
       <div class="label">Stored Water Volume</div>
       <div class="value" id="volume">-- m³</div>
     </div>
-    <div class="metric">
+    <div class="metric" style="margin-bottom: 0;">
       <div class="label">Sensor Distance (Raw)</div>
       <div class="value" id="distance">-- cm</div>
+    </div>
+  </div>
+
+  <!-- Visual Tank Card -->
+  <div class="card">
+    <div class="label" style="text-align: center; margin-bottom: 10px;">LIVE CAPACITY (MAX 350cm)</div>
+    <div class="tank-wrapper">
+      <div class="tank-container">
+        <div class="tank-water" id="tankWater"></div>
+        <div class="tank-percentage" id="tankPercentage">--%</div>
+      </div>
     </div>
     <div class="status" id="status">Connecting to Cloud...</div>
   </div>
 
   <script>
     // --- 1. CONFIGURATION ---
-    // Update these variables with your actual HiveMQ and Tasmota details
-    
-    // HiveMQ Cloud uses port 8884 for secure WebSockets
     const host = 'wss://fc2fac116e914f4aa3d6c1c4c9c093c6.s1.eu.hivemq.cloud:8884/mqtt'; 
     
     const options = {
@@ -64,7 +112,7 @@
       clientId: 'web-viewer-' + Math.random().toString(16).substr(2, 8)
     };
 
-    const tasmotaTopic = 'tele/+/SENSOR'; // Update if your Tasmota device name is different
+    const tasmotaTopic = 'tele/+/SENSOR';
 
     // --- 2. CONNECTION & MATH ---
     const client = mqtt.connect(host, options);
@@ -72,8 +120,6 @@
     client.on('connect', () => {
       document.getElementById('status').innerText = 'Connected to Cloud. Waiting for data...';
       document.getElementById('status').style.color = '#00e676';
-      
-      // Tell the broker we want to listen to the ESP32
       client.subscribe(tasmotaTopic);
     });
 
@@ -87,23 +133,32 @@
       try {
         const payload = JSON.parse(message.toString());
         
-        // Look for the SR04 distance reading in the JSON payload
         if (payload.SR04 && payload.SR04.Distance !== undefined) {
           const rawDistance = parseFloat(payload.SR04.Distance);
           
-          // Calculate height based on 373cm tank
+          // Calculate height based on sensor being placed at 373cm high
           const heightCm = 373 - rawDistance;
           
-          // Calculate volume based on 146.835 square meter footprint
+          // Calculate volume based on footprint
           const volumeM3 = heightCm * 1.46835;
 
-          // Push the numbers to the screen
+          // Calculate Percentage based on Max Capacity being 350cm
+          let percent = (heightCm / 350) * 100;
+          if (percent < 0) percent = 0;
+          if (percent > 100) percent = 100; // Cap it at 100% so the water doesn't draw outside the box
+
+          // Push the text numbers to the screen
           document.getElementById('distance').innerText = rawDistance.toFixed(1) + ' cm';
           document.getElementById('height').innerText = heightCm.toFixed(1) + ' cm';
           document.getElementById('volume').innerText = volumeM3.toFixed(2) + ' m³';
           
+          // Push visual updates to the Tank
+          document.getElementById('tankWater').style.height = percent + '%';
+          document.getElementById('tankPercentage').innerText = Math.round(percent) + '%';
+          
           const now = new Date();
           document.getElementById('status').innerText = 'Live update: ' + now.toLocaleTimeString();
+          document.getElementById('status').style.color = '#888'; // Reset color back to grey after connect
         }
       } catch (e) {
         console.error("Error parsing the message payload", e);
