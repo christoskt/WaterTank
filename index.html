@@ -33,6 +33,7 @@
   </div>
 
   <div class="card">
+    <div class="label" style="margin-bottom: 15px;">WATER HEIGHT HISTORY (CM)</div>
     <canvas id="tankChart"></canvas>
   </div>
 
@@ -47,7 +48,7 @@
     const chart = new Chart(ctx, {
       type: 'line',
       data: { labels: [], datasets: [{ data: [], borderColor: '#4facfe', tension: 0.4, fill: true, backgroundColor: 'rgba(79, 172, 254, 0.1)' }] },
-      options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+      options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: false } } }
     });
 
     const client = mqtt.connect(host, options);
@@ -66,7 +67,7 @@
         // Update Chart
         const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         chart.data.labels.push(now);
-        chart.data.datasets[0].data.push(vol);
+        chart.data.datasets[0].data.push(heightCm);
         if (chart.data.labels.length > 10) { chart.data.labels.shift(); chart.data.datasets[0].data.shift(); }
         chart.update();
       }
